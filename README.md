@@ -9,7 +9,7 @@ __
 
 # Förklarning av scriptet
 
-** DemoVPC:**
+**DemoVPC:**
 Skapar ett VPC (Virtual Private Cloud) för isolerad nätverkssegmentering, vilket skyddar resurser från externa hot.
 
 ### Public Subnets: 
