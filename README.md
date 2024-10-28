@@ -9,7 +9,9 @@ __
 
 # Förklarning av scriptet
 
-**DemoVPC:**<br>
+En provision-server (EC2) hostar wordpress-site med RDS (MariaDB) ansluten till sig. Databasen har tre stycken mountpoints ansluta till sig som respektive koppas ihop med ett subnät. Våran wordpress site mapp på Provision-server är replikerad till mounttargets och delar möjligheten för VM i ALB att få återkomst till sidan. Launch template förklarar inställningarna för dessa VM och gruppen skalas automatiskt upp fler VM vid behov/ökad belastning utefter vår template. För ökad säkerhet har flertal resurser lagts i separata säkerhetsgrupper.
+
+### DemoVPC:
 Skapar ett VPC (Virtual Private Cloud) för isolerad nätverkssegmentering, vilket skyddar resurser från externa hot.
 
 ### Public Subnets: 
@@ -24,15 +26,15 @@ Skapar en rutt till internet och associerar den med subnäten, vilket gör att i
 ### Säkerhetsgrupper (ALB, VM, Provisioning Server, RDS, EFS): 
 Olika säkerhetsgrupper begränsar åtkomst till specifika portar och IP-intervall, vilket ökar säkerheten:
 
-### ALB (Application Load Balancer): 
+**ALB (Application Load Balancer):**
 Tillåter endast HTTP-trafik från alla IP-adresser, men håller backend-resurser dolda.
-### VM Security Group: 
+**VM Security Group:**
 Begränsar HTTP, SSH och RDS-access från alla IP-adresser, vilket kan säkra trafik men är mer öppet än vanligt.
-### Provisioning Server: 
+**Provisioning Server:**
 Tillåter SSH och anslutning till EFS och RDS.
-### RDS och EFS Security Groups: 
+**RDS och EFS Security Groups:**
 RDS är skyddat av specifika säkerhetsgrupper för åtkomst via MySQL-porten (3306), medan EFS skyddas genom NFS-porten (2049).
-### Load Balancer (ALB) och Auto Scaling Group (ASG): 
+**Load Balancer (ALB) och Auto Scaling Group (ASG):**
 ALB hanterar inkommande trafik och dirigerar den till ASG-instans-gruppen, vilket möjliggör att webbapplikationen kan skalas horisontellt efter belastning.
 
 ### EFS och Mount Targets: 
