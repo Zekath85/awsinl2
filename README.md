@@ -3,14 +3,23 @@
 
 Denna uppgift är löst med hjälp av Cloudformations och ett bash-script. Genom att använda CloudFormation kan hela infrastrukturen skapas automatiskt och konsekvent, vilket minskar risken för mänskliga fel och säkerställer att samma konfiguration används i varje distribution.
 
+Kör scriptet via kommando:
+```
+aws cloudformation create-stack --stack-name Demo \
+  --template-body file://wordpress_CF.yaml \
+  --parameters ParameterKey=DBPassword,ParameterValue=dittlösenord\
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
 Infrastuktur:
 ![image](https://github.com/user-attachments/assets/053cbb37-bda8-412a-bc4b-eb4d7c242bb6)
 __
 
 # Förklarning av scriptet
 
-En provision-server (EC2) hostar wordpress-site med RDS (MariaDB) ansluten till sig. Databasen har tre stycken mountpoints ansluta till sig som respektive koppas ihop med ett subnät. Våran wordpress site mapp på Provision-server är replikerad till mounttargets och delar möjligheten för VM i ALB att få återkomst till sidan. Launch template förklarar inställningarna för dessa VM och gruppen skalas automatiskt upp fler VM vid behov/ökad belastning utefter vår template. För ökad säkerhet har flertal resurser lagts i separata säkerhetsgrupper.
+En provision-server (EC2) hostar wordpress-site med RDS (MariaDB) ansluten till sig som vår databas. EFS har tre stycken mountpoints ansluta till sig som respektive koppas ihop med ett subnät. Våran wordpress-site mapp på Provision-servern är replikerad till mounttargets och genom att fästa dessa mot VM i ASG möjliggör vi att de får återkomst till sidan. Launch template förklarar inställningarna för dessa VM och gruppen skalas automatiskt upp till fler VM vid behov/ökad belastning utefter vår template. ALB (lastbalanseraren) hanterar all inkommande HTTP trafik och för ökad säkerhet har flertal resurser lagts i separata säkerhetsgrupper. 
 
+## Resurser:
 ### DemoVPC:
 Skapar ett VPC (Virtual Private Cloud) för isolerad nätverkssegmentering, vilket skyddar resurser från externa hot.
 
@@ -23,28 +32,11 @@ Möjliggör utgående och inkommande internettrafik till resurser i VPC.
 ### Public Route Table & Associations: 
 Skapar en rutt till internet och associerar den med subnäten, vilket gör att instanser i subnäten kan kommunicera externt.
 
-### Säkerhetsgrupper (ALB, VM, Provisioning Server, RDS, EFS): 
-Olika säkerhetsgrupper begränsar åtkomst till specifika portar och IP-intervall, vilket ökar säkerheten:
-
-**ALB (Application Load Balancer):**
-Tillåter endast HTTP-trafik från alla IP-adresser, men håller backend-resurser dolda.
-**VM Security Group:**
-Begränsar HTTP, SSH och RDS-access från alla IP-adresser, vilket kan säkra trafik men är mer öppet än vanligt.
-**Provisioning Server:**
-Tillåter SSH och anslutning till EFS och RDS.
-**RDS och EFS Security Groups:**
-RDS är skyddat av specifika säkerhetsgrupper för åtkomst via MySQL-porten (3306), medan EFS skyddas genom NFS-porten (2049).
-**Load Balancer (ALB) och Auto Scaling Group (ASG):**
-ALB hanterar inkommande trafik och dirigerar den till ASG-instans-gruppen, vilket möjliggör att webbapplikationen kan skalas horisontellt efter belastning.
-
 ### EFS och Mount Targets: 
 Skapar och ansluter ett delat EFS-filsystem för applikationsdata, tillgängligt i alla zoner för redundans.
 
 ### RDS och Subnet Group: 
 En MariaDB RDS-instans skapas, endast tillgänglig inom VPC och skyddad av säkerhetsgrupper, vilket skyddar databasåtkomst.
-
-### Outputs: 
-Ger användaren viktig information, inklusive EFS-ID, RDS-endpoint, provisioning-serverns publika IP och DNS för lastbalanseraren.
 
 ## Säkerhetsfördelar
 Isolering i VPC och Subnät: Genom att använda ett VPC och separata subnät minskas risken för obehörig åtkomst till interna resurser.
