@@ -1,0 +1,429 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This is a demo 
+
+Parameters:
+  LatestAmiId:
+    Description: Region specific image from the Parameter Store
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+
+  DBUsername:
+    Description: Database admin account username
+    Type: String
+    Default: admin
+
+  DBPassword:
+    Description: Database admin account password
+    Type: String
+    NoEcho: true
+
+  DBName:
+    Description: The name of the database
+    Type: String
+    Default: wordpressdb  # Valfritt namn på din WordPress-databas
+
+  TablePrefix:
+    Type: String
+    Default: "wp_"
+    Description: "Prefix för WordPress-tabeller"
+
+
+
+Resources:
+  # Create a new VPC
+  DemoVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: DemoVPC
+
+  # Create public subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet3
+
+  # Create an Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # Attach the Internet Gateway to the VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DemoVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Create a route table for public subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  # Create a route to the Internet
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate public subnets with the route table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+  # Skapa en säkerhetsgrupp för ALB
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http traffic to ALB
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0  # HTTP access
+
+  VmSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host and RDS access
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0  # HTTP access
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # SSH access
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0  # HTTP access
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0  # HTTP access
+  
+  # Skapa en säkerhetsgrupp för provisioning server
+  ProvisioningServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and access to EFS
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # SSH access
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0  # HTTP access
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0  # HTTP access
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access to RDS
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow NFS
+      VpcId: !Ref DemoVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+
+  # Create the Application Load Balancer
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-ALB"
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Tags:
+        - Key: Name
+          Value: DemoALB
+
+  # Create a Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-TargetGroup"
+      VpcId: !Ref DemoVPC
+      Port: 80
+      Protocol: HTTP
+      HealthCheckPath: /
+      TargetType: instance
+      Tags:
+        - Key: Name
+          Value: DemoTargetGroup
+
+  # Create a Listener for the Load Balancer
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # Create the EFS File System
+  MyEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose  
+      Encrypted: true
+
+  # Create a Mount Target for the EFS
+  MyEFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFS
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MyEFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFS
+      SubnetId: !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MyEFSMountTarget3:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFS
+      SubnetId: !Ref PublicSubnet3
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      DBInstanceIdentifier: !Ref DBName
+      AllocatedStorage: 20
+      DBInstanceClass: db.t4g.micro  # Ändrad till db.t4g.micro för Free Tier
+      Engine: mariadb
+      EngineVersion: '10.11.9'
+      MasterUsername: !Ref DBUsername  # Se till att DBUsername är definierad som parameter
+      MasterUserPassword: !Ref DBPassword  # Använder parameter för lösenord
+      VPCSecurityGroups:
+        - !Ref  RDSSecurityGroup  # Återanvänd samma säkerhetsgrupp för kommunikation mellan EC2 och RDS
+      DBSubnetGroupName: !Ref RDSSubnetGroup  # Se till att RDSSubnetGroup är definierad
+      MultiAZ: false  # Inställningen för Multi-AZ
+      PubliclyAccessible: true  # Gör databasen inte tillgänglig offentligt
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for RDS"
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+
+
+  ProvisioningServer:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+      - MyRDS
+      - MyEFSMountTarget1
+      - MyEFSMountTarget2
+      - MyEFSMountTarget3
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref ProvisioningServerSecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      KeyName: DemoVMkey2
+      Tags:
+      - Key: Name
+        Value: "ProvisioningServer"   # Namnet på din EC2-instans
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          yum install -y amazon-efs-utils nfs-utils
+
+          # Create mount point for EFS
+          mkdir -p /var/www/html
+          # Wait for EFS to be available and mount it
+          for i in {1..10}; do
+            if mount -t efs -o tls "${MyEFS}":/ /var/www/html; then
+              echo "EFS mounted successfully."
+              break
+            fi
+            echo "Waiting for EFS to become available..."
+            sleep 5
+          done
+          # Add EFS to /etc/fstab to mount on reboot
+          echo "${MyEFS}:/ /var/www/html efs _netdev,tls 0 0" >> /etc/fstab
+
+          yum update -y
+          yum install wget php-mysqlnd httpd php-fpm php-json php php-devel php-gd php-curl php-xml -y
+          yum install httpd php-gd -y
+          wget https://wordpress.org/latest.tar.gz
+          tar -xzf latest.tar.gz
+          cp wordpress/wp-config-sample.php wordpress/wp-config.php
+          sed -i "s/'database_name_here'/'${DBName}'/g" wordpress/wp-config.php
+          sed -i "s/'username_here'/'${DBUsername}'/g" wordpress/wp-config.php
+          sed -i "s/'password_here'/'${DBPassword}'/g" wordpress/wp-config.php
+          sed -i "s/'localhost'/'${MyRDS.Endpoint.Address}'/g" wordpress/wp-config.php
+
+          cp -r wordpress/* /var/www/html/
+          chown -R apache /var/www
+          chgrp -R apache /var/www
+          chmod 2775 /var/www
+          sed -i  '151s/.*/AllowOverride All/' /etc/httpd/conf/httpd.conf
+          systemctl start php-fpm
+          systemctl enable php-fpm
+          systemctl start httpd
+          systemctl enable httpd
+
+          
+          
+
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t2.micro
+        KeyName: DemoVMkey2
+        SecurityGroupIds:
+          - !GetAtt VmSecurityGroup.GroupId      
+        UserData:   
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -e
+
+            # Install necessary packages
+            yum update -y
+            yum install -y amazon-efs-utils nfs-utils httpd wget php-fpm php-mysqli php-json php php-devel
+
+            # Create EFS mount point
+            mkdir -p /var/www/html
+            mount -t efs ${MyEFS}:/ /var/www/html
+
+            # Start Apache server
+            systemctl start httpd
+            systemctl enable httpd
+
+          
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: 
+      - MyEFSMountTarget1
+      - MyEFSMountTarget2
+      - MyEFSMountTarget3
+      - MyRDS
+      - ProvisioningServer
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MaxSize: '3'
+      MinSize: '1'
+      DesiredCapacity: '2'
+      VPCZoneIdentifier: 
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
+Outputs:
+  EFSFileSystemId:
+    Description: The ID of the created EFS
+    Value: !Ref MyEFS
+
+  RdsEndpoint:
+    Description: The endpoint of the RDS instance
+    Value: !GetAtt MyRDS.Endpoint.Address
+
+  ProvisioningServerPublicIP:
+    Description: Public IP Address of the Provisioning Server
+    Value: !GetAtt ProvisioningServer.PublicIp
+
+  LoadBalancerDNS:
+    Description: DNS name of the Load Balancer
+    Value: !GetAtt AppLoadBalancer.DNSName  # Rätt referens till LoadBalancer
