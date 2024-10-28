@@ -7,48 +7,37 @@ Infrastuktur:
 ![image](https://github.com/user-attachments/assets/053cbb37-bda8-412a-bc4b-eb4d7c242bb6)
 __
 
-2. VPC och subnät
-Skapar en VPC med CIDR-blocket 10.0.0.0/16 och tre offentliga subnät.
-Säkerhetsfördel: Begränsar resurserna till specifika IP-intervall inom VPC.
+# Förklarning av koden.
 
-4. Internet Gateway och routetabell
-Skapar och kopplar en Internet Gateway för att möjliggöra internetåtkomst för VPC
-och lägger till en routetabell för att dirigera trafik till internet. Subnät är kopplade till denna routetabell.
-Säkerhetsfördel: Endast specifika subnät har internetåtkomst, vilket förbättrar nätverkssäkerheten.
+###DemoVPC: 
+Skapar ett VPC (Virtual Private Cloud) för isolerad nätverkssegmentering, vilket skyddar resurser från externa hot.
 
-5. Säkerhetsgrupper
-Skapar olika säkerhetsgrupper för att hantera trafik:
-ALB-säkerhetsgrupp: Tillåter HTTP-trafik (port 80).
-VmSecurityGroup: Tillåter HTTP (80), SSH (22), och RDS-trafik (3306).
-ProvisioningServerSecurityGroup: Tillåter SSH och EFS-åtkomst.
-RDSSecurityGroup: Begränsar RDS-åtkomst (port 3306).
-EFSSecurityGroup: Tillåter EFS-åtkomst (port 2049).
-Säkerhetsfördel: Begränsad åtkomst till specifika portar och protokoll ökar säkerheten genom att bara tillåta nödvändig trafik.
+Public Subnets: Tre offentliga subnät i olika zoner, vilket säkerställer hög tillgänglighet och skalbarhet.
 
-6. Application Load Balancer (ALB)
-Skapar en ALB som hanterar HTTP-trafik och dirigerar den till de instanser som tillhör en specifik Target Group.
-Säkerhetsfördel: Lastbalanseraren minskar exponeringen av backend-resurser och kan också ge skydd mot DDoS-attacker.
+Internet Gateway & VPC Gateway Attachment: Möjliggör utgående och inkommande internettrafik till resurser i VPC.
 
-7. EFS (Elastic File System)
-Skapar ett EFS och mount-punkter i varje offentligt subnät för att hantera delad filsystem-åtkomst.
-Säkerhetsfördel: EFS är krypterad för att skydda data.
+Public Route Table & Associations: Skapar en rutt till internet och associerar den med subnäten, vilket gör att instanser i subnäten kan kommunicera externt.
 
-8. RDS (Managed Database)
-Skapar en RDS-databas (MariaDB) för att lagra data och ansluts till en Subnet Group. PubliclyAccessible är satt till false för att förhindra direkt åtkomst från internet.
-Säkerhetsfördel: Endast tillgänglig från specifika IP-adresser inom VPC
-och krypterar datatrafik.
+Säkerhetsgrupper (ALB, VM, Provisioning Server, RDS, EFS): Olika säkerhetsgrupper begränsar åtkomst till specifika portar och IP-intervall, vilket ökar säkerheten:
 
-9. EC2-instans för Provisioning Server
-Skapar en EC2-instans för provisioning med user data script för att installera och konfigurera en WordPress-installation.
-Säkerhetsfördel: Instansens säkerhetsgrupp begränsar trafik och tillåter endast SSH, vilket säkrar instansen från otillåten åtkomst.
+ALB (Application Load Balancer): Tillåter endast HTTP-trafik från alla IP-adresser, men håller backend-resurser dolda.
+VM Security Group: Begränsar HTTP, SSH och RDS-access från alla IP-adresser, vilket kan säkra trafik men är mer öppet än vanligt.
+Provisioning Server: Tillåter SSH och anslutning till EFS och RDS.
+RDS och EFS Security Groups: RDS är skyddat av specifika säkerhetsgrupper för åtkomst via MySQL-porten (3306), medan EFS skyddas genom NFS-porten (2049).
+Load Balancer (ALB) och Auto Scaling Group (ASG): ALB hanterar inkommande trafik och dirigerar den till ASG-instans-gruppen, vilket möjliggör att webbapplikationen kan skalas horisontellt efter belastning.
 
-10. Auto Scaling Group (ASG)
-Skapar en ASG med en startmall för att hantera skalbarhet och upprätthålla flera instanser för applikationen.
-Säkerhetsfördel: Kontinuerlig drift och redundans ökar applikationens motståndskraft vid attacker eller hårdvarufel.
-Säkerhetsfördelar totalt sett
-Segmentering av nätverkstrafik (subnät och säkerhetsgrupper) begränsar exponeringen för externa hot.
-Kryptering av EFS och begränsad åtkomst till RDS skyddar datalagring och överföring.
-Begränsade säkerhetsgruppsregler skyddar applikationens komponenter och följer principen om minsta nödvändiga åtkomst.
+EFS och Mount Targets: Skapar och ansluter ett delat EFS-filsystem för applikationsdata, tillgängligt i alla zoner för redundans.
+
+RDS och Subnet Group: En MariaDB RDS-instans skapas, endast tillgänglig inom VPC och skyddad av säkerhetsgrupper, vilket skyddar databasåtkomst.
+
+Outputs: Ger användaren viktig information, inklusive EFS-ID, RDS-endpoint, provisioning-serverns publika IP och DNS för lastbalanseraren.
+
+Säkerhetsfördelar
+Isolering i VPC och Subnät: Genom att använda ett VPC och separata subnät minskas risken för obehörig åtkomst till interna resurser.
+Kontrollerad Nätverksåtkomst via Säkerhetsgrupper: Varje resurs skyddas av en specifik säkerhetsgrupp, vilket endast tillåter nödvändig trafik och blockerar övrig oönskad åtkomst.
+ALB och ASG för belastningshantering: Lastbalanseraren skyddar backend-servrar från att exponeras direkt mot internet och säkerställer att bara godkända portar är öppna.
+Användning av parametrar för känslig information: Genom att ange variabler som lösenord och användarnamn med NoEcho skyddas dessa från att exponeras i loggar och användargränssnittet.
+Den här templaten tillhandahåller ett stabilt och säkert sätt att driftsätta en WordPress-applikation med skyddade resurser i AWS.
 
 Förslag på åtgärder för ökad säkerhet:
 Bastion Host för SSH behörighet
