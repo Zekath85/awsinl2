@@ -7,9 +7,9 @@ Infrastuktur:
 ![image](https://github.com/user-attachments/assets/053cbb37-bda8-412a-bc4b-eb4d7c242bb6)
 __
 
-# Förklarning av koden.
+# Förklarning av scriptet
 
-### DemoVPC: 
+**DemoVPC: **
 Skapar ett VPC (Virtual Private Cloud) för isolerad nätverkssegmentering, vilket skyddar resurser från externa hot.
 
 Public Subnets: Tre offentliga subnät i olika zoner, vilket säkerställer hög tillgänglighet och skalbarhet.
